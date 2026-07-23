@@ -1,3 +1,5 @@
 /target
 /venv
 /training_data/*
+/runs
+model.pt
