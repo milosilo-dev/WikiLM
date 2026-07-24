@@ -163,7 +163,7 @@ def epoch_func(epoch, model, train_dataloader, valid_dataloader, criterion, opti
     valid_loss = running_loss / len(valid_dataloader.dataset)
     valid_losses.append(valid_loss)
 
-    writer.add_scaler("Valid->Train Distance", valid_loss - train_loss, epoch);
+    writer.add_scalar("Valid->Train Distance", valid_loss - train_loss, epoch);
 
     scripted = torch.jit.script(model)
     scripted.save("model.pt")

@@ -2,4 +2,5 @@
 /venv
 /training_data/*
 /runs
+/model-bakups
 model.pt
