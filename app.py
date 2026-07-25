@@ -23,9 +23,11 @@ MODEL_INFO_FILE = INPUT_FOLDER + "/model.json"
 MODEL_SAVE_PATH = "model.pt"
 
 EMBED_DIM = 384
-HIDDEN_DIM = 768
+NUM_HEADS = 6      # 384 / 6 = 64 per head, standard
+NUM_LAYERS = 6
+MAX_SEQ_LEN = 64
 
-TRAIN_NEW = True
+TRAIN_NEW = False
 EPOCH_NUM = 10
 
 WARMUP_STEPS = 500
@@ -34,26 +36,41 @@ torch.backends.cudnn.benchmark = True
 scaler = torch.amp.GradScaler("cuda")
 
 class WordPredictor(nn.Module):
-    def __init__(self, vocab_size, embed_dim, hidden_dim):
+    def __init__(self, vocab_size, embed_dim, num_heads, num_layers, max_seq_len=64, dropout=0.1):
         super(WordPredictor, self).__init__()
 
-        self.encoding_embedding = nn.Embedding(vocab_size, embed_dim)
-        self.encoding_dropout = nn.Dropout(0.1)
+        self.token_embedding = nn.Embedding(vocab_size, embed_dim)
+        self.pos_embedding = nn.Embedding(max_seq_len, embed_dim)
+        self.dropout = nn.Dropout(dropout)
 
-        self.rnn = nn.LSTM(embed_dim, hidden_dim, batch_first=True, bidirectional=False, num_layers=2)
-        self.norm = nn.LayerNorm(hidden_dim)
-        self.rnn_dropout = nn.Dropout(0.1)
+        layer = nn.TransformerEncoderLayer(
+            d_model=embed_dim,
+            nhead=num_heads,
+            dim_feedforward=embed_dim * 4,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+            norm_first=True,
+        )
+        self.transformer = nn.TransformerEncoder(layer, num_layers=num_layers)
 
-        self.fc = nn.Linear(hidden_dim, vocab_size)
+        self.norm = nn.LayerNorm(embed_dim)
+        self.fc = nn.Linear(embed_dim, vocab_size)
+        self.fc.weight = self.token_embedding.weight
 
     def forward(self, x):
-        x = self.encoding_embedding(x)
-        x = self.encoding_dropout(x)
-        
-        x, _ = self.rnn(x)
-        x = self.norm(x)
-        x = self.rnn_dropout(x)
+        B, T = x.shape
+        positions = torch.arange(T, device=x.device).unsqueeze(0)
 
+        x = self.token_embedding(x) + self.pos_embedding(positions)
+        x = self.dropout(x)
+
+        causal_mask = torch.triu(
+            torch.full((T, T), float("-inf"), device=x.device), diagonal=1
+        )
+        x = self.transformer(x, mask=causal_mask, is_causal=True)
+
+        x = self.norm(x)
         x = self.fc(x)
         return x
 
@@ -196,9 +213,16 @@ def main():
     writer = SummaryWriter()
 
     vocab_size = get_model_info()
-    model = WordPredictor(vocab_size=vocab_size, embed_dim=EMBED_DIM, hidden_dim=HIDDEN_DIM)
-    if (not TRAIN_NEW):
-        model.load_state_dict(torch.load(MODEL_SAVE_PATH, map_location=DEVICE))
+
+    if TRAIN_NEW:
+        model = WordPredictor(vocab_size=vocab_size, 
+                            embed_dim=EMBED_DIM, 
+                            num_heads=NUM_HEADS, 
+                            num_layers=NUM_LAYERS, 
+                            max_seq_len=MAX_SEQ_LEN)
+    else:
+        model = torch.jit.load(MODEL_SAVE_PATH, map_location=DEVICE)
+
     model.to(DEVICE)
 
     criterion = nn.CrossEntropyLoss()
