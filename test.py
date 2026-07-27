@@ -79,7 +79,14 @@ def tokenize_word(word):
 
     return tokens
 
-
+def apply_repetition_penalty(logits, generated_tokens, penalty=1.3, window=64):
+    recent = set(generated_tokens[-window:])
+    for token_id in recent:
+        if logits[token_id] > 0:
+            logits[token_id] /= penalty
+        else:
+            logits[token_id] *= penalty
+    return logits
 
 def tokenize(text):
     output = []
@@ -117,18 +124,14 @@ def generate(tokens, amount=20):
         with torch.no_grad():
             output = model(x)
 
-        # take prediction for the final token
         logits = output[:, -1, :]
-
-        # remove batch dimension
         logits = logits.squeeze(0)
-
-        # temperature
+        logits = apply_repetition_penalty(logits, tokens)
         logits = logits / 0.8
 
         values, indices = torch.topk(logits, 40)
 
-        probs = F.softmax(values / 0.8, dim=-1)
+        probs = F.softmax(values, dim=-1)
 
         choice = torch.multinomial(probs, 1).item()
         next_token = indices[choice].item()

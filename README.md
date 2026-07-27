@@ -15,3 +15,6 @@ As you can see, the modle is not great but the core ideas of how an engish scent
 ### Tokenisation
 Most LLM's use a standesisted tokenisation algorithm of some kind but for this project i wanted to have a go at writting my own despite not knowing much about how tokenisation works. The tokeniser is written in rust because i needed a speed boost that could only be achived from a compiled language like rust or c. It works by taking an input dataset and creating a frequency distrobusion of all the words that occour within it. The top 25% of the frequency distrobusion is then used as direct entries in the token list. The next 50% of words are then split into threes and two and added to the tokenlist in parts, allowing the model to make its own words easily. The model then has acsess to a charcter list which has avery character and punction mark that could be needed. After this is done, a token list is exported and used when tokenising the actual inputs. the tokenisation mainly works by spliting up the input words into tokens, trying to make each word from as few tokens as possible, if the word itself is in the list, it will be used as one token otehrwise it will be split.
 
+## Todo
+- Improve the tokeniser, mainly the token list generation
+- Once other issues fixed, scale the model, Incresing seq length, adding more attention heads to the transformer

@@ -51,7 +51,7 @@ fn token_list(){
         lines_used += 1;
 
         let mut line = line.expect(format!("Line {} could not be read from input file.", lines_used).as_str());
-        line.retain(|c| !c.is_ascii_punctuation());
+        // line.retain(|c| !c.is_ascii_punctuation());
         line.retain(|c| c.is_ascii());
         line.truncate(line.trim_end().len());
         let line = line.to_lowercase();
@@ -67,8 +67,8 @@ fn token_list(){
     
     let mut word_freq: HashMap<String, u32> = HashMap::new();
     for word in words {
-        let is_numeric = word.chars().all(|c| c.is_ascii_digit());
-        if word != "" && !is_numeric{
+        // let is_numeric = word.chars().all(|c| c.is_ascii_digit());
+        if word != ""{
             if word_freq.contains_key(&word) {
                 word_freq.insert(word.clone(), word_freq[&word.clone()] + 1);
             } else {
