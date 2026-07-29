@@ -1,5 +1,5 @@
 use std::{env, fs::File};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write, stdin};
 use std::collections::HashMap;
 use std::fs;
 
@@ -212,10 +212,12 @@ fn tokenise_input(){
     writer.flush().expect("Could not write to disk!");
 }
 
-fn run() {
-    println!("CUDA available: {}", Cuda::is_available());
-    println!("CUDA devices: {}", Cuda::device_count());
+fn find_key_for_value<'a>(map: &'a HashMap<String, usize>, value: usize) -> Option<&String> {
+    map.iter()
+        .find_map(|(key, &val)| if val == value { Some(key) } else { None })
+}
 
+fn run() {
     let device = Device::cuda_if_available();
 
     let model = CModule::load_on_device(
@@ -223,32 +225,58 @@ fn run() {
         device
     ).unwrap();
 
-    let mut tokens: Vec<i64> = vec![
-        12, 54, 2, 81, 99,
-        // fill up to 64 tokens
-    ];
+    let mut token_cache: HashMap<String, Vec<usize>> = HashMap::new();
 
-    while tokens.len() < 64 {
-        tokens.insert(0, 0); // pad at the beginning
+    let data = fs::read_to_string("training_data/tokens.json").expect("Could not open 'training_data/tokens.json'.");
+    let tokens_vec: Vec<String> = serde_json::from_str(&data).expect("Incorrect json formatting.");
+    let token_map: HashMap<String, usize> = tokens_vec
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| (item, index))
+        .collect();
+    let whitespace = " ";
+
+    println!(">");
+    let mut input: String = String::new();
+    stdin().read_line(&mut input).unwrap();
+    while input != "quit" {
+        let mut tokens: Vec<i32> = vec![];
+        for word in input.split_whitespace(){
+            let word = whitespace.to_owned() + word;
+            tokens.extend(tokenise_word(word.as_str(), &token_map, &mut token_cache).into_iter().map(|x| x as i32));
+        }
+
+        while tokens.len() < 64 {
+            tokens.insert(0, 0);
+        }
+
+        let mut output_vec: Vec<i64> = vec![];
+        for _ in 0..50{
+            let start = tokens.len().saturating_sub(64);
+            let window = &tokens[start..];
+
+            let input_tensor = Tensor::from_slice(window)
+                .to_kind(Kind::Int64)
+                .reshape([1, 64])
+                .to_device(device);
+
+            let output = model.forward_ts(&[input_tensor]).unwrap();
+            let last_logits = output.select(1, 63);
+            let next_token = last_logits.argmax(-1, false);
+
+            let id = next_token.int64_value(&[]);
+            output_vec.push(id);
+            tokens.push(id as i32);
+        }
+        
+        for output in output_vec{
+            println!("{}", find_key_for_value(&token_map, output as usize).unwrap());
+        }
+
+        println!(">");
+        input = String::new();
+        stdin().read_line(&mut input).unwrap();
     }
-
-    let input = Tensor::from_slice(&tokens)
-        .to_kind(Kind::Int64)
-        .reshape([1, 64])
-        .to_device(device);
-
-    let output = model.forward_ts(&[input]).unwrap();
-    let last_logits = output.select(1, 63);
-    let next_token = last_logits.argmax(-1, false);
-
-    let vocab: Vec<String> =
-        serde_json::from_str(
-            &std::fs::read_to_string("training_data/tokens.json").unwrap()
-        ).unwrap();
-
-    let id = next_token.int64_value(&[]);
-
-    println!("{}", vocab[id as usize]);
 }
 
 fn main() {
