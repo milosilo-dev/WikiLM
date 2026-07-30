@@ -1,6 +1,6 @@
 use std::env;
 use custom_llm::frontend::run;
-use custom_llm::tokens::{token_list, tokenise_input};
+use custom_llm::tokens::{token_list, tokenise_input, test_tokeniser};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -13,6 +13,7 @@ fn main() {
             tokenise_input();
         }
         "run" => run(),
+        "test" => test_tokeniser(),
         _ => {},
     }
 }

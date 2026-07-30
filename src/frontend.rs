@@ -4,7 +4,7 @@ use std::fs;
 
 use tch::{Device, CModule, Tensor, Kind};
 
-use crate::tokens::tokenise_word;
+use crate::tokens::tokenise_text;
 
 fn find_key_for_value(map: &HashMap<String, usize>, value: usize) -> Option<&String> {
     map.iter()
@@ -30,7 +30,7 @@ fn generate_next_token(
     temperature: f64,
     top_k: i64,
     penalty: f64,
-) -> i64 {
+) -> (i64, i64) {
     let start = tokens.len().saturating_sub(64);
     let window = &tokens[start..];
 
@@ -47,6 +47,7 @@ fn generate_next_token(
     apply_repetition_penalty(&mut logits, tokens, penalty);
 
     let logits = logits / temperature;
+    let log_probs = logits.log_softmax(-1, Kind::Float);
 
     let (values, indices) = logits.topk(top_k, -1, true, true);
     let probs = values.softmax(-1, Kind::Float);
@@ -54,7 +55,29 @@ fn generate_next_token(
     let choice = probs.multinomial(1, false); // shape [1]
     let choice_idx = choice.int64_value(&[0]);
 
-    indices.int64_value(&[choice_idx])
+    (indices.int64_value(&[choice_idx]), log_probs.int64_value(&[choice_idx]))
+}
+
+fn generate_beams(
+    model: &CModule,
+    prompt: &[i32],
+    device: Device,
+    amount: usize,
+    beam_width: usize,
+    n_gram_block: usize,
+    top_k: i64,
+) -> Vec<i32> {
+    let mut beams: Vec<(Vec<i32>, f64)> = vec![(prompt.to_vec(), 0.0); beam_width];
+
+    for beam in &mut beams {
+        for _ in 0..amount{
+            let (id, prob) = generate_next_token(&model, &beam.0.to_vec(), device, 0.8, top_k, 1.3);
+            beam.0.push(id as i32);
+            beam.1 += (prob as f64).log10()
+        }
+    }
+
+    beams.iter().max_by(|a, b| a.1.total_cmp(&b.1)).unwrap().0.to_vec()
 }
 
 pub fn run() {
@@ -74,28 +97,19 @@ pub fn run() {
         .enumerate()
         .map(|(index, item)| (item, index))
         .collect();
-    let whitespace = " ";
 
     println!(">");
     let mut input: String = String::new();
     stdin().read_line(&mut input).unwrap();
     while input != "quit" {
         let mut tokens: Vec<i32> = vec![];
-        for word in input.split_whitespace(){
-            let word = whitespace.to_owned() + word;
-            tokens.extend(tokenise_word(word.as_str(), &token_map, &mut token_cache).into_iter().map(|x| x as i32));
-        }
+        tokens.extend(tokenise_text(input.as_str(), &token_map, &mut token_cache).into_iter().map(|x| x as i32));
 
         while tokens.len() < 64 {
             tokens.insert(0, 0);
         }
 
-        let mut output_vec: Vec<i64> = vec![];
-        for _ in 0..50 {
-            let id = generate_next_token(&model, &tokens, device, 0.8, 40, 1.3);
-            output_vec.push(id);
-            tokens.push(id as i32);
-        }
+        let output_vec: Vec<i32> = generate_beams(&model, &tokens, device, 30, 10, 0, 40);
         
         for output in output_vec{
             println!("{}", find_key_for_value(&token_map, output as usize).unwrap());

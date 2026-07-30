@@ -128,7 +128,7 @@ pub fn token_list(){
     modle_info.export("training_data/model.json");
 }
 
-pub fn tokenise_word(word: &str, token_map: &HashMap<String, usize>, token_cache: &mut HashMap<String, Vec<usize>>) -> Vec<usize>{
+pub fn tokenise_text(word: &str, token_map: &HashMap<String, usize>, token_cache: &mut HashMap<String, Vec<usize>>) -> Vec<usize>{
     let word = &word.to_lowercase();
     if let Some(&token) = token_map.get(word.as_str()){
         return vec![token]
@@ -193,19 +193,32 @@ pub fn tokenise_input(){
         .enumerate()
         .map(|(index, item)| (item, index))
         .collect();
-    let whitespace = " ";
 
     let input_data = fs::read_to_string("training_data/input.txt").expect("Could not open input.txt");
-    let mut output_tokens: Vec<usize> = vec![];
-
-    for word in input_data.split_whitespace(){
-        let word = whitespace.to_owned() + word;
-        output_tokens.extend(tokenise_word(word.as_str(), &token_map, &mut token_cache));
-    }
+    let output_tokens: Vec<usize> = tokenise_text(input_data.as_str(), &token_map, &mut token_cache);
 
     println!("Writing to output file!");
     let output_file = File::create("training_data/tokenized_input.json").expect("Could not open 'training_data/tokenized_input.json'.");
     let mut writer = BufWriter::new(output_file);
     serde_json::to_writer(&mut writer, &output_tokens).expect("Could not write output!");
     writer.flush().expect("Could not write to disk!");
+}
+
+pub fn test_tokeniser() {
+    let mut token_cache: HashMap<String, Vec<usize>> = HashMap::new();
+
+    let data = fs::read_to_string("training_data/tokens.json").expect("Could not open 'training_data/tokens.json'.");
+    let tokens_vec: Vec<String> = serde_json::from_str(&data).expect("Incorrect json formatting.");
+    let token_map: HashMap<String, usize> = tokens_vec
+        .clone()
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| (item, index))
+        .collect();
+
+    let tokens = tokenise_text("I love cheese!", &token_map, &mut token_cache);
+    for token in tokens {
+        print!("{}", tokens_vec[token]);
+    }
+    println!("");
 }
