@@ -64,7 +64,6 @@ fn generate_beams(
     device: Device,
     amount: usize,
     beam_width: usize,
-    n_gram_block: usize,
     top_k: i64,
 ) -> Vec<i32> {
     let mut beams: Vec<(Vec<i32>, f64)> = vec![(prompt.to_vec(), 0.0); beam_width];
@@ -109,7 +108,7 @@ pub fn run() {
             tokens.insert(0, 0);
         }
 
-        let output_vec: Vec<i32> = generate_beams(&model, &tokens, device, 30, 10, 0, 40);
+        let output_vec: Vec<i32> = generate_beams(&model, &tokens, device, 30, 10, 40);
         
         for output in output_vec{
             println!("{}", find_key_for_value(&token_map, output as usize).unwrap());
