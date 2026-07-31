@@ -1,12 +1,12 @@
-use std::env;
 use custom_llm::bpe::make_bpe_tokenset;
 use custom_llm::frontend::run;
-use custom_llm::tokens::{token_list, tokenise_input, test_tokeniser};
+use custom_llm::tokens::{test_tokeniser, token_list, tokenise_input};
+use std::env;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    match args[1].as_str(){
+    match args[1].as_str() {
         "token-list" => make_bpe_tokenset(),
         "tokenize-input" => tokenise_input(),
         "all" => {
@@ -15,6 +15,6 @@ fn main() {
         }
         "run" => run(),
         "test" => test_tokeniser(),
-        _ => {},
+        _ => {}
     }
 }
