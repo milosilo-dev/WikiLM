@@ -14,8 +14,8 @@ use serde_json::Value;
 
 #[recursive]
 pub fn tokenise_string(input_string: &String, tokenset: &mut Vec<String>, token_cache: Option<&mut HashMap<String, Vec<usize>>>, depth: u32) -> Vec<usize> {
-    println!("Depth: {}, Length: {}", depth, input_string.len());
-
+    println!("Depth: {}", depth);
+    println!("String length: {}", input_string.len());
     if input_string.len() == 0 {
         return vec![]
     } else if let Some(token_id) = tokenset.iter().position(|x| x == input_string){
@@ -47,7 +47,7 @@ pub fn tokenise_string(input_string: &String, tokenset: &mut Vec<String>, token_
 */
 
 // Token list related constants
-const TARGET_VOCAB_SIZE: usize = 50000; // Size of vocab that we result in end of iteration
+const TARGET_VOCAB_SIZE: usize = 1000; // Size of vocab that we result in end of iteration
 const INPUT_FILE_LENGTH: usize = 100; // Number of charcters to read from the input file
 
 const INPUT_FILE: &str = "training_data/input.txt";
@@ -63,7 +63,9 @@ fn read_charset(tokenset: &mut Vec<String>) {
     if let Some(obj) = chars_file_parsed.as_object() {
         for key in obj.keys() {
             let key = key.to_lowercase();
-            tokenset.push(key);
+            if !tokenset.contains(&key) {
+                tokenset.push(key);
+            }
         }
     }
 }
@@ -118,15 +120,17 @@ pub fn make_bpe_tokenset() {
     read_charset(&mut tokenset);
 
     let input_file: String = read_input_file();
-    let mut token_cache: HashMap<String, Vec<usize>> = HashMap::new();
 
-    while tokenset.len() != TARGET_VOCAB_SIZE {
+    while tokenset.len() <= TARGET_VOCAB_SIZE {
         println!("{}", tokenset.len());
+        let mut token_cache: HashMap<String, Vec<usize>> = HashMap::new();
         let tokenised_input_file = tokenise_string(&input_file, &mut tokenset, Some(&mut token_cache), 0);
         let tokenised_paired_input = vector_to_pairs(tokenised_input_file);
 
         let new_token = most_common_pair(&tokenised_paired_input).unwrap();
-        tokenset.push(format!("{}{}", tokenset[new_token.0], tokenset[new_token.1]))
+        println!("Token pair: {:?}", new_token);
+        let new_token = format!("{}{}", tokenset[new_token.0], tokenset[new_token.1]);
+        tokenset.push(new_token);
     }
 
     write_tokenset(&tokenset);
