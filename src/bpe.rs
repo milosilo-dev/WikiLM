@@ -13,25 +13,29 @@ use serde_json::Value;
 */
 
 #[recursive]
-pub fn tokenise_string(input_string: &String, tokenset: &mut Vec<String>, token_cache: Option<&mut HashMap<String, Vec<usize>>>) -> Vec<usize> {
+pub fn tokenise_string(input_string: &String, tokenset: &mut Vec<String>, token_cache: Option<&mut HashMap<String, Vec<usize>>>, depth: u32) -> Vec<usize> {
+    println!("Depth: {}, Length: {}", depth, input_string.len());
+
     if input_string.len() == 0 {
         return vec![]
     } else if let Some(token_id) = tokenset.iter().position(|x| x == input_string){
         return vec![token_id]
+    } else if input_string.len() == 1{
+        return vec![]
     } else if let Some(token_cache) = token_cache{
         if let Some(token_ids) = token_cache.get(input_string){
             return token_ids.clone();
         }
 
         let (first_half, second_half) = input_string.split_at(input_string.len() / 2);
-        let ret = [tokenise_string(&first_half.to_string(), tokenset, Some(token_cache)), tokenise_string(&second_half.to_string(), tokenset, Some(token_cache))]
+        let ret = [tokenise_string(&first_half.to_string(), tokenset, Some(token_cache), depth + 1), tokenise_string(&second_half.to_string(), tokenset, Some(token_cache), depth + 1)]
             .concat();
         token_cache.insert(input_string.clone(), ret.clone());
         return ret;
     }
 
     let (first_half, second_half) = input_string.split_at(input_string.len() / 2);
-    [tokenise_string(&first_half.to_string(), tokenset, None), tokenise_string(&second_half.to_string(), tokenset, None)]
+    [tokenise_string(&first_half.to_string(), tokenset, None, depth + 1), tokenise_string(&second_half.to_string(), tokenset, None, depth + 1)]
         .concat()
 }
 
@@ -118,7 +122,7 @@ pub fn make_bpe_tokenset() {
 
     while tokenset.len() != TARGET_VOCAB_SIZE {
         println!("{}", tokenset.len());
-        let tokenised_input_file = tokenise_string(&input_file, &mut tokenset, Some(&mut token_cache));
+        let tokenised_input_file = tokenise_string(&input_file, &mut tokenset, Some(&mut token_cache), 0);
         let tokenised_paired_input = vector_to_pairs(tokenised_input_file);
 
         let new_token = most_common_pair(&tokenised_paired_input).unwrap();
